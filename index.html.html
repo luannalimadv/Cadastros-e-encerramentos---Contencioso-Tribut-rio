@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contencioso Tributário - Magalu</title>
+    
+    <!-- Bibliotecas de Suporte -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --magalu-blue: #0081c9;
+            --danger: #ef4444;
+            --success: #10b981;
+            --bg: #f1f5f9;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg); color: #1e293b; }
+
+        /* TELA DE LOGIN POR SENHA */
+        #login-overlay {
+            position: fixed; inset: 0; background: var(--magalu-blue);
+            display: flex; align-items: center; justify-content: center; z-index: 10000;
+        }
+        .login-card {
+            background: white; padding: 40px; border-radius: 16px; 
+            text-align: center; box-shadow: 0 20px 25px rgba(0,0,0,0.2);
+            width: 380px;
+        }
+        .login-card h2 { color: var(--magalu-blue); margin-bottom: 20px; }
+        .login-card input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; text-align: center; font-size: 16px; }
+        .btn-login { width: 100%; padding: 12px; background: var(--magalu-blue); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        #login-error { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
+
+        /* CONTEÚDO PRINCIPAL */
+        #main-app { display: none; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .logo { font-weight: 800; color: var(--magalu-blue); font-size: 18px; }
+
+        /* ÁREA DE OCR */
+        .ocr-dropzone {
+            background: #e0f2fe; border: 2px dashed var(--magalu-blue);
+            padding: 25px; border-radius: 12px; text-align: center; cursor: pointer; margin-bottom: 25px;
+            transition: 0.3s;
+        }
+        .ocr-dropzone:hover { background: #d0eaff; }
+        #loading-ocr { display: none; color: var(--magalu-blue); font-weight: bold; margin-top: 10px; animation: blink 1s infinite; }
+
+        /* FORMULÁRIO */
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        .grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block; }
+        input, textarea { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; }
+        .btn-add { background: var(--magalu-blue); color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; }
+
+        /* ABAS */
+        .tabs { display: flex; gap: 10px; margin-bottom: 0; }
+        .tab { padding: 12px 25px; border: none; background: #e2e8f0; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: 600; color: #64748b; }
+        .tab.active { background: white; color: var(--magalu-blue); box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+
+        /* TABELA */
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 0 12px 12px 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        th { background: #f8fafc; padding: 15px; text-align: left; font-size: 12px; color: #64748b; border-bottom: 2px solid #f1f5f9; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .check-col { width: 70px; text-align: center; }
+        input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--success); cursor: pointer; }
+
+        /* EXPORTAÇÃO */
+        .export-actions { margin-top: 20px; display: none; text-align: right; gap: 10px; }
+        .btn-export { padding: 10px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; color: white; }
+
+        @keyframes blink { 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div id="login-overlay">
+    <div class="login-card">
+        <h2>Acesso Restrito</h2>
+        <p style="font-size: 13px; margin-bottom: 20px; color: #666;">Contencioso Tributário - Magazine Luiza</p>
+        <input type="password" id="passInput" placeholder="Senha de acesso" onkeypress="if(event.key==='Enter') validarSenha()">
+        <button class="btn-login" onclick="validarSenha()">ENTRAR NO SISTEMA</button>
+        <div id="login-error">Senha incorreta!</div>
+    </div>
+</div>
+
+<!-- SISTEMA PRINCIPAL -->
+<div id="main-app">
+    <div class="container">
+        <header>
+            <div class="logo">Magazine Luiza | <span style="font-weight: 300;">Aberturas e encerramentos - Contencioso Tributário</span></div>
+            <button onclick="logout()" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:600;">Sair</button>
+        </header>
+
+        <!-- OCR -->
+        <div class="ocr-dropzone" onclick="document.getElementById('pdfFile').click()">
+            <p><strong>✨ Extração Automática via IA</strong></p>
+            <p style="font-size: 12px; color: #64748b;">Clique para processar o PDF e extrair o Número e a Data da Ciência</p>
+            <input type="file" id="pdfFile" accept="application/pdf" style="display: none;">
+            <div id="loading-ocr">🔍 IA Analisando Processo...</div>
+        </div>
+
+        <!-- Cadastro -->
+        <div class="card">
+            <div class="grid">
+                <div>
+                    <label>Número do Processo</label>
+                    <input type="text" id="procNum" placeholder="CNJ ou Administrativo">
+                </div>
+                <div>
+                    <label>Data da Ciência</label>
+                    <input type="date" id="dtCien" onchange="document.getElementById('dtAber').value = this.value">
+                </div>
+                <div>
+                    <label>Data de Abertura</label>
+                    <input type="date" id="dtAber">
+                </div>
+            </div>
+            <label>Observações Manuais</label>
+            <textarea id="procObs" rows="2" placeholder="Detalhes importantes do processo..."></textarea>
+            <button class="btn-add" onclick="cadastrar()">CADASTRAR NO CONTROLE</button>
+        </div>
+
+        <!-- Abas -->
+        <div class="tabs">
+            <button class="tab active" id="tabP" onclick="trocarAba('p')">📥 Pendentes</button>
+            <button class="tab" id="tabC" onclick="trocarAba('c')">✅ Concluídos</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th class="check-col">Check</th>
+                    <th width="250">Nº Processo</th>
+                    <th>Ciência</th>
+                    <th>Abertura</th>
+                    <th>Observações</th>
+                    <th width="80">Ações</th>
+                </tr>
+            </thead>
+            <tbody id="tabelaBody"></tbody>
+        </table>
+
+        <div class="export-actions" id="exportBar">
+            <button class="btn-export" style="background:#16a34a" onclick="exportar('xlsx')">Exportar Excel (.xlsx)</button>
+            <button class="btn-export" style="background:#475569" onclick="exportar('csv')">Exportar CSV</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- SEGURANÇA ---
+    function validarSenha() {
+        const pass = document.getElementById('passInput').value;
+        if (pass === "@Contencioso1") {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            sessionStorage.setItem('autenticado', 'true');
+            renderizar();
+        } else {
+            document.getElementById('login-error').style.display = 'block';
+        }
+    }
+
+    function logout() {
+        sessionStorage.removeItem('autenticado');
+        location.reload();
+    }
+
+    if(sessionStorage.getItem('autenticado') === 'true') {
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+    }
+
+    // --- OCR ---
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+    document.getElementById('pdfFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        document.getElementById('loading-ocr').style.display = 'block';
+
+        const reader = new FileReader();
+        reader.onload = async function() {
+            try {
+                const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 2.0 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height; canvas.width = viewport.width;
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                const { data: { text } } = await Tesseract.recognize(canvas, 'por');
+                
+                const regexCNJ = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/;
+                const regexADM = /\d{4}\.\d{12}-\d{2}/;
+                const regexData = /\d{2}\/\d{2}\/\d{4}/;
+
+                const matchProc = text.match(regexCNJ) || text.match(regexADM);
+                const matchData = text.match(regexData);
+
+                if (matchProc) document.getElementById('procNum').value = matchProc[0];
+                if (matchData) {
+                    const [d, m, a] = matchData[0].split('/');
+                    const formatada = `${a}-${m}-${d}`;
+                    document.getElementById('dtCien').value = formatada;
+                    document.getElementById('dtAber').value = formatada;
+                }
+            } catch (err) {
+                alert("Erro ao ler o PDF. Tente inserir manualmente.");
+            } finally {
+                document.getElementById('loading-ocr').style.display = 'none';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    // --- LÓGICA DE DADOS ---
+    let db = JSON.parse(localStorage.getItem('db_magalu_v6') || '[]');
+    let abaAtiva = 'p';
+
+    function cadastrar() {
+        const proc = {
+            id: Date.now(),
+            numero: document.getElementById('procNum').value,
+            ciencia: document.getElementById('dtCien').value,
+            abertura: document.getElementById('dtAber').value,
+            obs: document.getElementById('procObs').value,
+            feito: false
+        };
+        if(!proc.numero || !proc.ciencia) return alert("Por favor, preencha o número e a data de ciência.");
+        db.push(proc);
+        salvar();
+        limparCampos();
+    }
+
+    // MENSAGEM DE CONFIRMAÇÃO NO CHECK
+    function toggleCheck(id) {
+        const proc = db.find(p => p.id === id);
+        
+        // Se estiver pendente e for marcar como concluído
+        if (!proc.feito) {
+            if (confirm("Deseja confirmar o encerramento deste cadastro? O processo será movido para a aba 'Concluídos'.")) {
+                db = db.map(p => p.id === id ? {...p, feito: true} : p);
+                salvar();
+            } else {
+                renderizar(); // Força a atualização para desmarcar o checkbox visualmente
+            }
+        } else {
+            // Se já estiver concluído e quiser retornar para pendentes
+            db = db.map(p => p.id === id ? {...p, feito: false} : p);
+            salvar();
+        }
+    }
+
+    function excluir(id) {
+        if(confirm("Deseja excluir permanentemente este registro?")) {
+            db = db.filter(p => p.id !== id);
+            salvar();
+        }
+    }
+
+    function salvar() {
+        localStorage.setItem('db_magalu_v6', JSON.stringify(db));
+        renderizar();
+    }
+
+    function trocarAba(aba) {
+        abaAtiva = aba;
+        document.getElementById('tabP').classList.toggle('active', aba === 'p');
+        document.getElementById('tabC').classList.toggle('active', aba === 'c');
+        document.getElementById('exportBar').style.display = aba === 'c' ? 'flex' : 'none';
+        renderizar();
+    }
+
+    function renderizar() {
+        const body = document.getElementById('tabelaBody');
+        body.innerHTML = '';
+        const filtrados = db.filter(p => abaAtiva === 'p' ? !p.feito : p.feito);
+
+        filtrados.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="check-col"><input type="checkbox" ${p.feito ? 'checked' : ''} onchange="toggleCheck(${p.id})"></td>
+                <td><strong>${p.numero}</strong></td>
+                <td>${formatarData(p.ciencia)}</td>
+                <td>${formatarData(p.abertura)}</td>
+                <td style="color:#64748b">${p.obs || '-'}</td>
+                <td><button onclick="excluir(${p.id})" style="border:none; color:red; cursor:pointer; background:none; font-size:12px">Excluir</button></td>
+            `;
+            body.appendChild(tr);
+        });
+    }
+
+    function formatarData(d) {
+        if(!d) return "-";
+        return d.split('-').reverse().join('/');
+    }
+
+    function limparCampos() {
+        ['procNum', 'dtCien', 'dtAber', 'procObs'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function exportar(tipo) {
+        const dados = db.filter(p => p.feito).map(p => ({
+            "Número Processo": p.numero,
+            "Data Ciência": formatarData(p.ciencia),
+            "Data Abertura": formatarData(p.abertura),
+            "Observações": p.obs
+        }));
+
+        if(tipo === 'xlsx') {
+            const ws = XLSX.utils.json_to_sheet(dados);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Concluídos");
+            XLSX.writeFile(wb, "Relatorio_Tributario_Magalu.xlsx");
+        } else {
+            let csv = "\uFEFFNúmero Processo;Data Ciência;Data Abertura;Observações\n";
+            dados.forEach(d => {
+                csv += `${d["Número Processo"]};${d["Data Ciência"]};${d["Data Abertura"]};${d["Observações"]}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "Relatorio_Contencioso.csv";
+            link.click();
+        }
+    }
+
+    renderizar();
+</script>
+
+</body>
+</html>
